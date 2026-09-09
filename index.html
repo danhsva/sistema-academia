@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Gest&atilde;o de Treinos</title>
+  <style>
+    :root {
+      --primary: #0066cc;
+      --primary-dark: #004c99;
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #222222;
+      --border: #dce1e8;
+      --danger: #dc3545;
+      --success: #28a745;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 12px; }
+    .container { max-width: 960px; margin: 0 auto; }
+    
+    .hidden { display: none !important; }
+    .card { background: var(--card); border-radius: 10px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px; border: 1px solid var(--border); }
+    h2, h3, h4 { margin-bottom: 12px; color: var(--primary-dark); }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 12px; font-size: 14px; }
+    button { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    button:hover { background: var(--primary-dark); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; filter: grayscale(0.5); }
+    .btn-danger { background: var(--danger); }
+    .btn-danger:hover { background: #bd2130; }
+    .btn-success { background: var(--success); }
+    .btn-success:hover { background: #218838; }
+    .btn-secondary { background: #6c757d; }
+    .btn-secondary:hover { background: #5a6268; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-block { width: 100%; }
+
+    .nav-tabs { display: flex; gap: 8px; border-bottom: 2px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+    .nav-tabs button { background: none; color: #666; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 16px; }
+    .nav-tabs button.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: bold; }
+
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .col { flex: 1; min-width: 200px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    th, td { border: 1px solid var(--border); padding: 8px; text-align: left; }
+    th { background: #fafafa; }
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #e9ecef; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+
+    /* Autocomplete Professor */
+    .busca-wrapper { position: relative; width: 100%; }
+    .sugestoes-box {
+      position: absolute; top: 100%; left: 0; right: 0; max-height: 220px; overflow-y: auto;
+      background: #ffffff; border: 1px solid var(--border); border-radius: 0 0 6px 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 1000; display: none;
+    }
+    .sugestao-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .sugestao-item:hover { background: #f0f7ff; }
+
+    /* Painel e Cronômetros Aluno */
+    .timer-painel {
+      background: #0f172a; color: #ffffff; border-radius: 10px; padding: 14px; margin-bottom: 16px;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    }
+    .timer-box { display: flex; flex-direction: column; }
+    .timer-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; }
+    .timer-value { font-size: 20px; font-weight: bold; font-family: monospace; color: #38bdf8; }
+
+    .descanso-bar {
+      background: #fef3c7; border: 2px solid var(--warning); border-radius: 8px; padding: 12px;
+      margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;
+    }
+
+    /* Cards de Exercício do Aluno */
+    .exercicio-card {
+      background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+      margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: all 0.2s ease;
+    }
+    .exercicio-card.em-execucao {
+      border: 2px solid var(--primary); box-shadow: 0 4px 14px rgba(0,102,204,0.18);
+    }
+    .exercicio-card.bloqueado {
+      opacity: 0.42; filter: grayscale(0.6); pointer-events: none;
+    }
+    .exercicio-card.finalizado {
+      background: #f8fafc; border-color: #cbd5e1; opacity: 0.85;
+    }
+
+    .series-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .serie-row {
+      display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;
+      background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;
+    }
+    .serie-concluida { background: #dcfce7 !important; border-color: #86efac !important; }
+
+    /* Modal de Troca de Senha */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 15px;
+    }
+    .modal-box {
+      background: #ffffff; border-radius: 10px; padding: 22px; width: 100%; max-width: 400px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ================= 1. LOGIN ================= -->
+  <div id="authSection" class="card" style="max-width: 400px; margin: 40px auto;">
+    <h2>Acesso ao Sistema</h2>
+    <label>Identifique seu Perfil:</label>
+    <select id="loginPerfil">
+      <option value="aluno">Aluno</option>
+      <option value="professor">Professor</option>
+    </select>
+
+    <label>CPF (apenas n&uacute;meros):</label>
+    <input type="text" id="loginCpf" placeholder="Ex: 00000000000">
+
+    <label>Senha:</label>
+    <input type="password" id="loginSenha" placeholder="Digite sua senha">
+
+    <button style="width: 100%; margin-bottom: 12px;" onclick="fazerLogin()">Entrar</button>
+
+    <!-- Configuração para o GitHub Pages conectar à Raspberry Pi -->
+    <details style="margin-top: 10px; font-size: 12px; color: #666;">
+      <summary style="cursor: pointer; color: var(--primary);">⚙️ Configurar Servidor da Academia</summary>
+      <div style="margin-top: 8px;">
+        <label style="font-size: 11px;">URL do Cloudflare da Raspberry Pi:</label>
+        <input type="text" id="cfgApiUrl" placeholder="https://seu-tunel.trycloudflare.com" style="padding: 6px; font-size: 12px; margin-bottom: 6px;">
+        <button class="btn-sm btn-secondary" style="width: 100%;" onclick="salvarConfigServidor()">Salvar Servidor</button>
+      </div>
+    </details>
+  </div>
+
+  <!-- ================= MODAL PRIMEIRO ACESSO ================= -->
+  <div id="modalPrimeiroAcesso" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>Cadastrar Nova Senha</h3>
+      <p style="font-size: 13px; color: #555; margin-bottom: 14px;">
+        Esta &eacute; a sua primeira vez acessando o sistema. Cadastre uma senha pessoal para substituir o seu CPF.
+      </p>
+      <label>Nova Senha:</label>
+      <input type="password" id="novaSenhaInput" placeholder="M&iacute;nimo 4 d&iacute;gitos">
+      <label>Confirmar Nova Senha:</label>
+      <input type="password" id="confirmaSenhaInput" placeholder="Repita a senha">
+      <button class="btn-success btn-block" onclick="salvarNovaSenhaPrimeiroAcesso()">Salvar Nova Senha</button>
+      <button class="btn-secondary btn-block" style="margin-top: 8px;" onclick="fecharModalSenha()">Lembrar Depois</button>
+    </div>
+  </div>
+
+  <!-- ================= 2. PAINEL DO PROFESSOR ================= -->
+  <div id="profSection" class="hidden">
+    <div class="top-bar">
+      <div>
+        <h2>Painel do Professor</h2>
+        <span id="profLogadoNome" class="badge"></span>
+      </div>
+      <button onclick="fazerLogout()" class="btn-sm btn-danger">Sair</button>
+    </div>
+
+    <div class="nav-tabs">
+      <button class="active" onclick="alternarAbaProf('abaUsuarios', this)">Usu&aacute;rios</button>
+      <button onclick="alternarAbaProf('abaTreinos', this)">Cadastro de Treino</button>
+    </div>
+
+    <!-- ABA USUÁRIOS -->
+    <div id="abaUsuarios">
+      <div class="card">
+        <h3>Cadastrar Novo Usu&aacute;rio</h3>
+        <form id="formCadUsuario" onsubmit="salvarUsuario(event)">
+          <div class="row">
+            <div class="col" style="max-width: 250px;">
+              <label>Tipo de Perfil:</label>
+              <select id="cadUserTipo" onchange="ajustarTipoUsuarioForm()">
+                <option value="aluno">Aluno</option>
+                <option value="professor">Professor</option>
+              </select>
+            </div>
+            <div class="col"><label>Nome Completo:</label><input type="text" id="cadUserNome" required></div>
+            <div class="col"><label>CPF (apenas n&uacute;meros):</label><input type="text" id="cadUserCpf" required></div>
+          </div>
+          <div class="row">
+            <div class="col"><label>Data Nascimento:</label><input type="date" id="cadUserNasc"></div>
+            <div class="col"><label>Altura (m):</label><input type="number" step="0.01" id="cadUserAltura" placeholder="Ex: 1.75"></div>
+            <div class="col"><label>Peso (kg):</label><input type="number" step="0.1" id="cadUserPeso" placeholder="Ex: 75.0"></div>
+            <div class="col"><label>CEP:</label><input type="text" id="cadUserCep"></div>
+          </div>
+          <div class="row">
+            <div class="col"><label>Rua:</label><input type="text" id="cadUserRua"></div>
+            <div class="col"><label>N&uacute;mero:</label><input type="text" id="cadUserNum"></div>
+            <div class="col"><label>Bairro:</label><input type="text" id="cadUserBairro"></div>
+          </div>
+          <label>Observa&ccedil;&otilde;es:</label>
+          <input type="text" id="cadUserObs">
+          <button type="submit" id="btnSalvarUsuario">Cadastrar Aluno</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3>Alunos Cadastrados</h3>
+          <span id="contadorAlunos" class="badge">0 alunos</span>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>Cadastrado Por</th>
+                <th>Treino Elaborado Por</th>
+                <th style="width: 260px;">A&ccedil;&otilde;es</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaAlunos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3>Professores Cadastrados</h3>
+          <span id="contadorProfessores" class="badge">0 professores</span>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>Observa&ccedil;&otilde;es</th>
+                <th style="width: 80px;">A&ccedil;&atilde;o</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaProfessores"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABA TREINOS (PROFESSOR) -->
+    <div id="abaTreinos" class="hidden">
+      <div class="card">
+        <h3>Gerenciar Treino do Aluno</h3>
+        <div id="boxBuscaAluno">
+          <label>Localizar Aluno (digite nome ou CPF):</label>
+          <div class="busca-wrapper">
+            <input type="text" id="inputBuscaAluno" placeholder="Ex: Lucas ou 123..." oninput="buscarAlunosContexto(this.value)" autocomplete="off">
+            <div id="listaSugestoesAlunos" class="sugestoes-box"></div>
+          </div>
+        </div>
+
+        <div id="boxAlunoSelecionado" class="hidden" style="background: #eef4fb; border-left: 4px solid var(--primary); padding: 14px; border-radius: 6px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 16px; color: var(--primary-dark);" id="lblNomeAlunoSelecionado"></strong>
+            <div style="font-size: 12px; color: #555; margin-top: 2px;" id="lblInfoAlunoSelecionado"></div>
+          </div>
+          <button type="button" class="btn-sm btn-secondary" onclick="desmarcarAlunoTreino()">Trocar de Aluno</button>
+        </div>
+
+        <div id="areaEdicaoTreino" class="hidden">
+          <div class="row">
+            <div class="col">
+              <label>Divis&atilde;o da Ficha:</label>
+              <select id="selTreinoDivisao" onchange="carregarTreinosAlunoSelecionado()">
+                <option value="A">Treino A</option>
+                <option value="B">Treino B</option>
+                <option value="C">Treino C</option>
+                <option value="D">Treino D</option>
+                <option value="E">Treino E</option>
+              </select>
+            </div>
+          </div>
+
+          <h4 style="margin: 15px 0 10px;">Adicionar Exerc&iacute;cio</h4>
+          <div class="row">
+            <div class="col" style="flex: 2;">
+              <label>Exerc&iacute;cio:</label>
+              <select id="selExercicioCatalogo"></select>
+            </div>
+            <div class="col"><label>S&eacute;ries:</label><input type="number" id="numSeries" value="3"></div>
+            <div class="col"><label>Repeti&ccedil;&otilde;es:</label><input type="text" id="txtReps" value="10-12"></div>
+          </div>
+          <button type="button" onclick="adicionarExercicioFicha()">Incluir na Ficha</button>
+
+          <h4 style="margin-top: 25px;">Ficha Atual</h4>
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Exerc&iacute;cio</th>
+                  <th>Grupo</th>
+                  <th>S&eacute;ries x Reps</th>
+                  <th style="width: 80px;">A&ccedil;&atilde;o</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaTreinoAtual"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="boxHistoricoTreino" class="card hidden">
+        <h3>Hist&oacute;rico de Altera&ccedil;&otilde;es deste Aluno</h3>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Data/Hora</th>
+                <th>Professor</th>
+                <th>A&ccedil;&atilde;o</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaHistoricoTreino"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 3. PAINEL DO ALUNO ================= -->
+  <div id="alunoSection" class="hidden">
+    <div class="top-bar">
+      <div>
+        <h2 id="alunoNomeDisplay">Meu Treino</h2>
+        <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">Aluno</span>
+      </div>
+      <button onclick="fazerLogout()" class="btn-sm btn-danger">Sair</button>
+    </div>
+
+    <!-- SELEÇÃO DE TREINO E DESCANSO -->
+    <div id="alunoSelecaoDivisao" class="card">
+      <h3>Selecione seu Treino de Hoje</h3>
+      <p style="font-size: 13px; color: #666; margin-bottom: 14px;">
+        Toque no treino que você irá realizar hoje para visualizar os exercícios:
+      </p>
+
+      <div id="gradeDivisoesAluno" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;"></div>
+
+      <div style="border-top: 1px solid var(--border); padding-top: 16px;">
+        <label>Tempo de Descanso entre S&eacute;ries:</label>
+        <div class="row" style="align-items: center;">
+          <div class="col" style="max-width: 140px;">
+            <input type="number" id="tempoDescansoSegundos" value="60" min="10" step="5" style="margin-bottom:0;">
+          </div>
+          <div class="col">
+            <span style="font-size: 13px; color: #666;">segundos (definido para todos os exercícios)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SESSÃO DE TREINO ATIVA -->
+    <div id="alunoTreinoAtivo" class="hidden">
+      <div class="timer-painel">
+        <div class="timer-box">
+          <span class="timer-label">Tempo de Treino</span>
+          <span class="timer-value" id="dispTempoTreino">00:00:00</span>
+        </div>
+        <div class="timer-box">
+          <span class="timer-label">Tempo no Exerc&iacute;cio</span>
+          <span class="timer-value" id="dispTempoExercicio">00:00</span>
+        </div>
+        <div class="timer-box">
+          <span class="timer-label">Tempo da S&eacute;rie</span>
+          <span class="timer-value" id="dispTempoSerie">00:00</span>
+        </div>
+        <button class="btn-danger btn-sm" onclick="finalizarTreinoAluno()">Finalizar Treino</button>
+      </div>
+
+      <div id="boxDescansoRegressivo" class="descanso-bar hidden">
+        <div>
+          <strong style="color: #92400e;">⏳ Descanso:</strong>
+          <span id="dispDescansoRestante" style="font-size: 18px; font-weight: bold; margin-left: 6px; font-family: monospace;">00:00</span>
+        </div>
+        <button class="btn-secondary btn-sm" onclick="pularDescanso()">Pular Descanso</button>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 id="tituloFichaAtiva" style="margin: 0;">Treino Ativo</h3>
+        <button class="btn-secondary btn-sm" onclick="voltarParaSelecaoTreino()">Voltar / Trocar</button>
+      </div>
+
+      <div id="containerExerciciosFicha"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let usuarioLogado = null;
+  let catalogoExercicios = [];
+  let listaAlunosCache = [];
+  let listaProfessoresCache = [];
+  let alunoSelecionadoAtual = null;
+
+  // Estado da Sessão de Treino do Aluno
+  let divisaoTreinoAtiva = null;
+  let treinoIniciadoGeral = false;
+  let exercicioAtivoId = null;
+  let exerciciosConcluidos = new Set();
+
+  let timerTreinoInterval = null;
+  let timerExercicioInterval = null;
+  let timerSerieInterval = null;
+  let timerDescansoInterval = null;
+
+  let segTreinoTotal = 0;
+  let segExercicioAtual = 0;
+  let segSerieAtual = 0;
+  let segDescansoRestante = 0;
+  let audioContext = null;
+
+  // ----------------- CONFIGURAÇÃO DE URL (LOCAL vs GITHUB PAGES) -----------------
+  function getApiBase() {
+    if (window.location.hostname.includes('github.io')) {
+      const customUrl = localStorage.getItem('servidor_academia_url') || '';
+      return customUrl ? customUrl.replace(/\/+$/, '') + '/api' : '/api';
+    }
+    return '/api';
+  }
+
+  function salvarConfigServidor() {
+    const url = document.getElementById('cfgApiUrl').value.trim();
+    if (!url) {
+      alert("Digite a URL do túnel Cloudflare da sua Raspberry Pi.");
+      return;
+    }
+    localStorage.setItem('servidor_academia_url', url);
+    alert("Endereço do servidor salvo com sucesso!");
+  }
+
+  // ----------------- INICIALIZAÇÃO / SESSÃO -----------------
+  window.addEventListener('DOMContentLoaded', () => {
+    const salvoServidor = localStorage.getItem('servidor_academia_url');
+    const inputCfg = document.getElementById('cfgApiUrl');
+    if (salvoServidor && inputCfg) inputCfg.value = salvoServidor;
+    restaurarSessao();
+  });
+
+  function restaurarSessao() {
+    const salvo = localStorage.getItem('usuarioLogado');
+    if (salvo) {
+      try {
+        usuarioLogado = JSON.parse(salvo);
+        iniciarInterfacePorPerfil();
+      } catch (e) {
+        localStorage.removeItem('usuarioLogado');
+      }
+    }
+  }
+
+  function iniciarInterfacePorPerfil() {
+    document.getElementById('authSection').classList.add('hidden');
+
+    if (usuarioLogado.perfil === 'professor') {
+      document.getElementById('profSection').classList.remove('hidden');
+      document.getElementById('profLogadoNome').textContent = usuarioLogado.nome;
+      carregarAlunos();
+      carregarProfessores();
+      carregarExerciciosCatalogo();
+    } else {
+      document.getElementById('alunoSection').classList.remove('hidden');
+      document.getElementById('alunoNomeDisplay').textContent = "Ol\u00e1, " + usuarioLogado.nome;
+      carregarDivisoesAluno();
+    }
+  }
+
+  // ----------------- LOGIN / LOGOUT -----------------
+  async function fazerLogin() {
+    const perfil = document.getElementById('loginPerfil').value;
+    const cpf = document.getElementById('loginCpf').value;
+    const senha = document.getElementById('loginSenha').value;
+
+    const res = await fetch(`${getApiBase()}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ perfil, cpf, senha })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.erro || 'Falha no login');
+      return;
+    }
+
+    usuarioLogado = data.usuario;
+
+    if (usuarioLogado.primeiro_acesso) {
+      document.getElementById('modalPrimeiroAcesso').classList.remove('hidden');
+      usuarioLogado.primeiro_acesso = false;
+    }
+
+    localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
+    iniciarInterfacePorPerfil();
+  }
+
+  function fazerLogout() {
+    pararTodosTimers();
+    localStorage.removeItem('usuarioLogado');
+    usuarioLogado = null;
+    location.reload();
+  }
+
+  // ----------------- TROCA DE SENHA -----------------
+  function fecharModalSenha() {
+    document.getElementById('modalPrimeiroAcesso').classList.add('hidden');
+  }
+
+  async function salvarNovaSenhaPrimeiroAcesso() {
+    const nova = document.getElementById('novaSenhaInput').value;
+    const conf = document.getElementById('confirmaSenhaInput').value;
+
+    if (!nova || nova.length < 4) {
+      alert("A nova senha deve ter pelo menos 4 caracteres.");
+      return;
+    }
+    if (nova !== conf) {
+      alert("As senhas digitadas não coincidem.");
+      return;
+    }
+
+    const res = await fetch(`${getApiBase()}/aluno/${usuarioLogado.id}/trocar-senha`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nova_senha: nova })
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(data.mensagem);
+      fecharModalSenha();
+    } else {
+      alert(data.erro);
+    }
+  }
+
+  // ----------------- GESTÃO DO PROFESSOR -----------------
+  function alternarAbaProf(abaId, btn) {
+    ['abaUsuarios', 'abaTreinos'].forEach(id => document.getElementById(id).classList.add('hidden'));
+    document.querySelectorAll('#profSection .nav-tabs button').forEach(b => b.classList.remove('active'));
+    document.getElementById(abaId).classList.remove('hidden');
+    if (btn) btn.classList.add('active');
+  }
+
+  function ajustarTipoUsuarioForm() {
+    const tipo = document.getElementById('cadUserTipo').value;
+    document.getElementById('btnSalvarUsuario').textContent = (tipo === 'aluno') ? 'Cadastrar Aluno' : 'Cadastrar Professor';
+  }
+
+  async function carregarAlunos() {
+    const res = await fetch(`${getApiBase()}/professor/alunos`);
+    listaAlunosCache = await res.json();
+    document.getElementById('contadorAlunos').textContent = `${listaAlunosCache.length} alunos`;
+    const tbody = document.getElementById('tabelaAlunos');
+
+    if (listaAlunosCache.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#888;">Nenhum aluno cadastrado.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = listaAlunosCache.map(a => {
+      const temTreino = (a.total_treinos && a.total_treinos > 0);
+      const btnTexto = temTreino ? 'Editar Treino' : 'Cadastrar Treino';
+      const btnClasse = temTreino ? 'btn-secondary' : 'btn-success';
+
+      return `
+        <tr>
+          <td><strong>${a.nome}</strong></td>
+          <td>${a.cpf}</td>
+          <td>${a.professor_cadastrador_nome || 'N/A'}</td>
+          <td>${a.professor_treino_nome || '<span style="color:#999;">Sem treino</span>'}</td>
+          <td style="white-space: nowrap;">
+            <button class="btn-sm ${btnClasse}" onclick="abrirTreinoAlunoDireto(${a.id})">${btnTexto}</button>
+            <button class="btn-sm" style="background:#475569;" onclick="resetarSenhaAluno(${a.id}, '${a.nome.replace(/'/g, "\\'")}')" title="Resetar para o CPF">Resetar Senha</button>
+            <button class="btn-sm btn-danger" onclick="excluirAluno(${a.id}, '${a.nome.replace(/'/g, "\\'")}')">Excluir</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function resetarSenhaAluno(alunoId, nomeAluno) {
+    if (!confirm(`Deseja retornar a senha do aluno "${nomeAluno}" para o CPF padrão?\n\nOs treinos e histórico permanecerão intactos.`)) return;
+    const res = await fetch(`${getApiBase()}/professor/aluno/${alunoId}/resetar-senha`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) alert(data.mensagem); else alert(data.erro);
+  }
+
+  async function carregarProfessores() {
+    const res = await fetch(`${getApiBase()}/professores`);
+    listaProfessoresCache = await res.json();
+    document.getElementById('contadorProfessores').textContent = `${listaProfessoresCache.length} professores`;
+    const tbody = document.getElementById('tabelaProfessores');
+
+    tbody.innerHTML = listaProfessoresCache.map(p => `
+      <tr>
+        <td><strong>${p.nome}</strong></td>
+        <td>${p.cpf}</td>
+        <td>${p.observacoes || '—'}</td>
+        <td>
+          <button class="btn-sm btn-danger" onclick="excluirProfessor(${p.id}, '${p.nome.replace(/'/g, "\\'")}')">Excluir</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function salvarUsuario(e) {
+    e.preventDefault();
+    const tipo = document.getElementById('cadUserTipo').value;
+    const payload = {
+      nome: document.getElementById('cadUserNome').value,
+      cpf: document.getElementById('cadUserCpf').value,
+      data_nascimento: document.getElementById('cadUserNasc').value,
+      altura: document.getElementById('cadUserAltura').value,
+      peso: document.getElementById('cadUserPeso').value,
+      cep: document.getElementById('cadUserCep').value,
+      rua: document.getElementById('cadUserRua').value,
+      numero: document.getElementById('cadUserNum').value,
+      bairro: document.getElementById('cadUserBairro').value,
+      observacoes: document.getElementById('cadUserObs').value
+    };
+
+    if (tipo === 'aluno') {
+      payload.professor_cadastrador_id = usuarioLogado.id;
+      const res = await fetch(`${getApiBase()}/professor/aluno`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        document.getElementById('formCadUsuario').reset();
+        ajustarTipoUsuarioForm();
+        await carregarAlunos();
+
+        const novoId = data.aluno ? data.aluno.id : null;
+        if (confirm(`Aluno "${payload.nome}" cadastrado com sucesso!\n\nDeseja CADASTRAR O TREINO deste aluno agora?`)) {
+          if (novoId) abrirTreinoAlunoDireto(novoId);
+        }
+      } else {
+        alert(data.erro);
+      }
+    } else {
+      const res = await fetch(`${getApiBase()}/professores`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Professor cadastrado com sucesso! A senha inicial é o CPF.");
+        document.getElementById('formCadUsuario').reset();
+        ajustarTipoUsuarioForm();
+        carregarProfessores();
+      } else {
+        alert(data.erro);
+      }
+    }
+  }
+
+  async function excluirAluno(alunoId, nomeAluno) {
+    if (!confirm(`Excluir o aluno "${nomeAluno}" e todas as suas fichas?`)) return;
+    const res = await fetch(`${getApiBase()}/professor/aluno/${alunoId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      if (alunoSelecionadoAtual && alunoSelecionadoAtual.id == alunoId) desmarcarAlunoTreino();
+      carregarAlunos();
+    } else alert(data.erro);
+  }
+
+  async function excluirProfessor(profId, nomeProf) {
+    if (usuarioLogado.id == profId) { alert("Você não pode excluir seu próprio perfil logado."); return; }
+    if (!confirm(`Remover professor "${nomeProf}"?`)) return;
+    const res = await fetch(`${getApiBase()}/professores/${profId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) carregarProfessores(); else alert(data.erro);
+  }
+
+  function buscarAlunosContexto(termo) {
+    const box = document.getElementById('listaSugestoesAlunos');
+    const q = termo.trim().toLowerCase();
+    if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+    const filtrados = listaAlunosCache.filter(a => a.nome.toLowerCase().includes(q) || a.cpf.includes(q));
+    if (filtrados.length === 0) {
+      box.innerHTML = `<div style="padding: 12px; color: #888; font-size: 13px; text-align: center;">Nenhum aluno encontrado</div>`;
+      box.style.display = 'block'; return;
+    }
+
+    box.innerHTML = filtrados.map(a => {
+      const temTreino = (a.total_treinos && a.total_treinos > 0);
+      const badgeStatus = temTreino 
+        ? `<span class="badge" style="background:#e0f2fe; color:#0369a1;">${a.total_treinos} exerc.</span>`
+        : `<span class="badge" style="background:#fef3c7; color:#92400e;">Sem treino</span>`;
+
+      return `
+        <div class="sugestao-item" onclick="selecionarAlunoTreino(${a.id})">
+          <div>
+            <strong>${a.nome}</strong>
+            <div style="font-size: 11px; color: #666;">CPF: ${a.cpf}</div>
+          </div>
+          <div>${badgeStatus}</div>
+        </div>
+      `;
+    }).join('');
+    box.style.display = 'block';
+  }
+
+  function selecionarAlunoTreino(alunoId) {
+    const aluno = listaAlunosCache.find(a => a.id == alunoId);
+    if (!aluno) return;
+    alunoSelecionadoAtual = aluno;
+
+    document.getElementById('inputBuscaAluno').value = '';
+    document.getElementById('listaSugestoesAlunos').style.display = 'none';
+    document.getElementById('boxBuscaAluno').classList.add('hidden');
+
+    document.getElementById('boxAlunoSelecionado').classList.remove('hidden');
+    document.getElementById('lblNomeAlunoSelecionado').textContent = aluno.nome;
+    document.getElementById('lblInfoAlunoSelecionado').textContent = 
+      `CPF: ${aluno.cpf} | Cadastrado por: ${aluno.professor_cadastrador_nome || 'N/A'}`;
+
+    document.getElementById('areaEdicaoTreino').classList.remove('hidden');
+    document.getElementById('boxHistoricoTreino').classList.remove('hidden');
+    carregarTreinosAlunoSelecionado();
+  }
+
+  function desmarcarAlunoTreino() {
+    alunoSelecionadoAtual = null;
+    document.getElementById('boxAlunoSelecionado').classList.add('hidden');
+    document.getElementById('areaEdicaoTreino').classList.add('hidden');
+    document.getElementById('boxHistoricoTreino').classList.add('hidden');
+    document.getElementById('boxBuscaAluno').classList.remove('hidden');
+    document.getElementById('inputBuscaAluno').focus();
+  }
+
+  function abrirTreinoAlunoDireto(alunoId) {
+    const btnTreino = document.querySelectorAll('#profSection .nav-tabs button')[1];
+    alternarAbaProf('abaTreinos', btnTreino);
+    selecionarAlunoTreino(alunoId);
+  }
+
+  async function carregarTreinosAlunoSelecionado() {
+    if (!alunoSelecionadoAtual) return;
+    const tipo = document.getElementById('selTreinoDivisao').value;
+    const res = await fetch(`${getApiBase()}/professor/aluno/${alunoSelecionadoAtual.id}/treinos?tipo=${tipo}`);
+    const treinos = await res.json();
+    const tbody = document.getElementById('tabelaTreinoAtual');
+
+    if (treinos.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#888;">Nenhum exercício cadastrado no Treino ${tipo}.</td></tr>`;
+    } else {
+      tbody.innerHTML = treinos.map(t => `
+        <tr>
+          <td>${t.exercicio_nome}</td>
+          <td>${t.grupo}</td>
+          <td>${t.series} x ${t.repeticoes}</td>
+          <td><button class="btn-sm btn-danger" onclick="removerTreino(${t.id})">Excluir</button></td>
+        </tr>
+      `).join('');
+    }
+
+    const resHist = await fetch(`${getApiBase()}/professor/aluno/${alunoSelecionadoAtual.id}/historico`);
+    const hist = await resHist.json();
+    const tbodyHist = document.getElementById('tabelaHistoricoTreino');
+    tbodyHist.innerHTML = hist.map(h => `
+      <tr>
+        <td>${h.data_alteracao}</td>
+        <td>${h.professor_nome}</td>
+        <td><span class="badge">${h.acao}</span></td>
+        <td>${h.detalhes}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function adicionarExercicioFicha() {
+    if (!alunoSelecionadoAtual) return;
+    const payload = {
+      aluno_id: alunoSelecionadoAtual.id,
+      exercicio_id: document.getElementById('selExercicioCatalogo').value,
+      tipo_treino: document.getElementById('selTreinoDivisao').value,
+      series: document.getElementById('numSeries').value,
+      repeticoes: document.getElementById('txtReps').value,
+      professor_id: usuarioLogado.id
+    };
+
+    const res = await fetch(`${getApiBase()}/professor/treino`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      carregarTreinosAlunoSelecionado();
+      carregarAlunos();
+    } else {
+      const data = await res.json();
+      alert(data.erro);
+    }
+  }
+
+  async function removerTreino(treinoId) {
+    if (!confirm("Remover exercício da ficha?")) return;
+    const res = await fetch(`${getApiBase()}/professor/treino/${treinoId}?professor_id=${usuarioLogado.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      carregarTreinosAlunoSelecionado();
+      carregarAlunos();
+    }
+  }
+
+  async function carregarExerciciosCatalogo() {
+    const res = await fetch(`${getApiBase()}/professor/exercicios`);
+    catalogoExercicios = await res.json();
+    document.getElementById('selExercicioCatalogo').innerHTML = 
+      catalogoExercicios.map(e => `<option value="${e.id}">[${e.grupo}] ${e.nome}</option>`).join('');
+  }
+
+  // ================= 4. ÁREA DO ALUNO =================
+  async function carregarDivisoesAluno() {
+    const container = document.getElementById('gradeDivisoesAluno');
+    container.innerHTML = '<span style="color:#666; font-size:13px;">Carregando seus treinos...</span>';
+
+    try {
+      const res = await fetch(`${getApiBase()}/aluno/${usuarioLogado.id}/divisoes`);
+      if (!res.ok) throw new Error("Erro na busca de divisões");
+      const divisoes = await res.json();
+
+      if (!Array.isArray(divisoes) || divisoes.length === 0) {
+        container.innerHTML = `
+          <div style="padding: 16px; background: #fff3cd; color: #856404; border-radius: 8px; width: 100%; font-size: 13px;">
+            ⚠️ Nenhum treino encontrado para seu cadastro. Solicite ao professor a montagem da sua ficha.
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = divisoes.map(d => `
+        <button class="btn" style="flex: 1; min-width: 140px; font-size: 16px; padding: 14px;" 
+                onclick="iniciarTreinoAluno('${d}')">
+          Treino ${d}
+        </button>
+      `).join('');
+    } catch (e) {
+      container.innerHTML = `<span style="color:var(--danger); font-size:13px;">Erro ao carregar treinos. Verifique a conexão com o servidor.</span>`;
+    }
+  }
+
+  async function iniciarTreinoAluno(tipo) {
+    divisaoTreinoAtiva = tipo;
+    treinoIniciadoGeral = false;
+    exercicioAtivoId = null;
+    exerciciosConcluidos.clear();
+    pararTodosTimers();
+
+    segTreinoTotal = 0;
+    segExercicioAtual = 0;
+    segSerieAtual = 0;
+
+    document.getElementById('dispTempoTreino').textContent = "00:00:00";
+    document.getElementById('dispTempoExercicio').textContent = "00:00";
+    document.getElementById('dispTempoSerie').textContent = "00:00";
+
+    document.getElementById('alunoSelecaoDivisao').classList.add('hidden');
+    document.getElementById('alunoTreinoAtivo').classList.remove('hidden');
+    document.getElementById('tituloFichaAtiva').textContent = `Treino ${tipo} em Andamento`;
+
+    const res = await fetch(`${getApiBase()}/aluno/${usuarioLogado.id}/treino/${tipo}`);
+    const treinos = await res.json();
+    const container = document.getElementById('containerExerciciosFicha');
+
+    if (treinos.length === 0) {
+      container.innerHTML = "<p>Nenhum exercício encontrado nesta ficha.</p>";
+      return;
+    }
+
+    container.innerHTML = treinos.map(t => {
+      const totalSeries = parseInt(t.series) || 3;
+      let seriesHtml = '';
+
+      for (let s = 1; s <= totalSeries; s++) {
+        seriesHtml += `
+          <div class="serie-row" id="serieRow_${t.id}_${s}">
+            <span style="font-weight: 600;">Série ${s} (${t.repeticoes} reps)</span>
+            <button class="btn-sm btn-secondary" id="btnSerie_${t.id}_${s}" disabled
+                    onclick="concluirSerieExercicio(${t.id}, ${s}, ${totalSeries})">
+              Concluir Série ${s}
+            </button>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="exercicio-card" id="cardExercicio_${t.id}">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+            <div>
+              <strong style="font-size: 15px; color: var(--primary-dark);">${t.exercicio_nome}</strong>
+              <span class="badge" style="margin-left: 6px;">${t.grupo}</span>
+              <div style="font-size: 12px; color: #666; margin-top: 3px;">Alvo: ${t.series} x ${t.repeticoes}</div>
+            </div>
+            <div id="acoesExercicio_${t.id}">
+              <button class="btn-sm btn-success" id="btnIniciarEx_${t.id}" onclick="iniciarExercicio(${t.id})">
+                ▶ Iniciar Exercício
+              </button>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; align-items: center; margin: 10px 0 6px;">
+            <label style="margin: 0; font-size: 12px;">Carga usada (kg):</label>
+            <input type="number" id="carga_${t.id}" value="${t.ultima_carga || 0}" 
+                   style="max-width: 90px; padding: 6px; margin: 0; font-weight: bold;">
+            <small style="color: #777;">(anterior: ${t.ultima_carga || 0} kg)</small>
+          </div>
+
+          <div class="series-grid">
+            ${seriesHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // --- ACIONAR EXERCÍCIO ESCOLHIDO PELO ALUNO ---
+  function iniciarExercicio(treinoId) {
+    if (exercicioAtivoId !== null) return;
+
+    exercicioAtivoId = treinoId;
+
+    // Cronômetro do treino total só inicia ao disparar o primeiro exercício
+    if (!treinoIniciadoGeral) {
+      treinoIniciadoGeral = true;
+      timerTreinoInterval = setInterval(() => {
+        segTreinoTotal++;
+        document.getElementById('dispTempoTreino').textContent = formatarSegundos(segTreinoTotal, true);
+      }, 1000);
+    }
+
+    clearInterval(timerExercicioInterval);
+    segExercicioAtual = 0;
+    timerExercicioInterval = setInterval(() => {
+      segExercicioAtual++;
+      document.getElementById('dispTempoExercicio').textContent = formatarSegundos(segExercicioAtual, false);
+    }, 1000);
+
+    clearInterval(timerSerieInterval);
+    segSerieAtual = 0;
+    timerSerieInterval = setInterval(() => {
+      segSerieAtual++;
+      document.getElementById('dispTempoSerie').textContent = formatarSegundos(segSerieAtual, false);
+    }, 1000);
+
+    const cardAtivo = document.getElementById(`cardExercicio_${treinoId}`);
+    cardAtivo.classList.add('em-execucao');
+
+    document.getElementById(`acoesExercicio_${treinoId}`).innerHTML = `
+      <span class="badge" style="background:#22c55e; color:#fff; font-size:12px; padding:6px 10px;">▶ Em Execução</span>
+    `;
+
+    const btnS1 = document.getElementById(`btnSerie_${treinoId}_1`);
+    btnS1.disabled = false;
+    btnS1.className = "btn-sm btn-primary";
+
+    document.querySelectorAll('.exercicio-card').forEach(card => {
+      if (card.id !== `cardExercicio_${treinoId}`) {
+        card.classList.add('bloqueado');
+      }
+    });
+  }
+
+  // --- CONCLUSÃO DE SÉRIE ---
+  async function concluirSerieExercicio(treinoId, numSerie, totalSeries) {
+    const btnAtual = document.getElementById(`btnSerie_${treinoId}_${numSerie}`);
+    const rowAtual = document.getElementById(`serieRow_${treinoId}_${numSerie}`);
+    const inputCarga = document.getElementById(`carga_${treinoId}`);
+    const carga = inputCarga.value || 0;
+
+    btnAtual.disabled = true;
+    btnAtual.textContent = "✓ Feito";
+    btnAtual.className = "btn-sm btn-success";
+    rowAtual.classList.add('serie-concluida');
+
+    segSerieAtual = 0;
+
+    fetch(`${getApiBase()}/aluno/execucao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aluno_id: usuarioLogado.id, treino_id: treinoId, carga: carga })
+    });
+
+    if (numSerie < totalSeries) {
+      const proximoNum = numSerie + 1;
+      const btnProximo = document.getElementById(`btnSerie_${treinoId}_${proximoNum}`);
+      btnProximo.disabled = false;
+      btnProximo.className = "btn-sm btn-primary";
+
+      iniciarDescanso();
+    } else {
+      finalizarExercicioAtivo(treinoId);
+    }
+  }
+
+  function finalizarExercicioAtivo(treinoId) {
+    clearInterval(timerExercicioInterval);
+    clearInterval(timerSerieInterval);
+
+    exerciciosConcluidos.add(treinoId);
+    exercicioAtivoId = null;
+
+    const card = document.getElementById(`cardExercicio_${treinoId}`);
+    card.classList.remove('em-execucao');
+    card.classList.add('finalizado');
+
+    document.getElementById(`acoesExercicio_${treinoId}`).innerHTML = `
+      <span class="badge" style="background:#64748b; color:#fff; font-size:12px; padding:6px 10px;">✓ Concluído</span>
+    `;
+
+    document.querySelectorAll('.exercicio-card').forEach(c => {
+      const idStr = c.id.replace('cardExercicio_', '');
+      const cId = parseInt(idStr);
+      if (!exerciciosConcluidos.has(cId)) {
+        c.classList.remove('bloqueado');
+      }
+    });
+
+    tocarAlertaSonoro(false);
+
+    const totalCards = document.querySelectorAll('.exercicio-card').length;
+    if (exerciciosConcluidos.size === totalCards) {
+      alert("🎉 Parabéns! Você concluiu todos os exercícios deste treino!");
+    }
+  }
+
+  // --- DESCANSO ---
+  function iniciarDescanso() {
+    clearInterval(timerDescansoInterval);
+    const tempoCfg = parseInt(document.getElementById('tempoDescansoSegundos').value) || 60;
+    segDescansoRestante = tempoCfg;
+
+    const boxDescanso = document.getElementById('boxDescansoRegressivo');
+    boxDescanso.classList.remove('hidden');
+    document.getElementById('dispDescansoRestante').textContent = formatarSegundos(segDescansoRestante, false);
+
+    timerDescansoInterval = setInterval(() => {
+      segDescansoRestante--;
+      document.getElementById('dispDescansoRestante').textContent = formatarSegundos(segDescansoRestante, false);
+
+      if (segDescansoRestante <= 0) {
+        clearInterval(timerDescansoInterval);
+        boxDescanso.classList.add('hidden');
+        tocarAlertaSonoro(true);
+      }
+    }, 1000);
+  }
+
+  function pularDescanso() {
+    clearInterval(timerDescansoInterval);
+    document.getElementById('boxDescansoRegressivo').classList.add('hidden');
+  }
+
+  function tocarAlertaSonoro(vibrar) {
+    try {
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, audioContext.currentTime);
+      gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      osc.start();
+      osc.stop(audioContext.currentTime + 0.35);
+
+      if (vibrar && navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    } catch (e) {}
+  }
+
+  function pararTodosTimers() {
+    clearInterval(timerTreinoInterval);
+    clearInterval(timerExercicioInterval);
+    clearInterval(timerSerieInterval);
+    clearInterval(timerDescansoInterval);
+  }
+
+  function formatarSegundos(totalSegundos, comHoras) {
+    const h = Math.floor(totalSegundos / 3600);
+    const m = Math.floor((totalSegundos % 3600) / 60);
+    const s = totalSegundos % 60;
+    const strM = String(m).padStart(2, '0');
+    const strS = String(s).padStart(2, '0');
+    if (comHoras) return `${String(h).padStart(2, '0')}:${strM}:${strS}`;
+    return `${strM}:${strS}`;
+  }
+
+  function voltarParaSelecaoTreino() {
+    if (confirm("Deseja interromper o treino em andamento e voltar para a seleção?")) {
+      pararTodosTimers();
+      document.getElementById('alunoTreinoAtivo').classList.add('hidden');
+      document.getElementById('alunoSelecaoDivisao').classList.remove('hidden');
+    }
+  }
+
+  function finalizarTreinoAluno() {
+    if (confirm(`Finalizar o treino de hoje?\nTempo total: ${formatarSegundos(segTreinoTotal, true)}`)) {
+      pararTodosTimers();
+      document.getElementById('alunoTreinoAtivo').classList.add('hidden');
+      document.getElementById('alunoSelecaoDivisao').classList.remove('hidden');
+    }
+  }
+</script>
+
+</body>
+</html>
