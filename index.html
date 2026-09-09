@@ -111,7 +111,7 @@
 
 <div class="container">
 
-  <!-- ================= 1. LOGIN (SEM CONFIGURAÇÃO LOCAL) ================= -->
+  <!-- ================= 1. LOGIN ================= -->
   <div id="authSection" class="card" style="max-width: 400px; margin: 40px auto;">
     <h2>Acesso ao Sistema</h2>
     <label>Identifique seu Perfil:</label>
@@ -339,7 +339,7 @@
         <label>Tempo de Descanso entre S&eacute;ries:</label>
         <div class="row" style="align-items: center;">
           <div class="col" style="max-width: 140px;">
-            <input type="number" id="tempoDescansoSegundos" value="60" min="10" step="5" style="margin-bottom:0;">
+            <input type="number" id="tempoDescansoSegundos" value="60" min="10" step="5" style="margin-bottom:0;" onchange="ajustarTempoDescanso(this.value)">
           </div>
           <div class="col">
             <span style="font-size: 13px; color: #666;">segundos (definido para todos os exercícios)</span>
@@ -366,6 +366,7 @@
         <button class="btn-danger btn-sm" onclick="finalizarTreinoAluno()">Finalizar Treino</button>
       </div>
 
+      <!-- Barra de Descanso Regressivo -->
       <div id="boxDescansoRegressivo" class="descanso-bar hidden">
         <div>
           <strong style="color: #92400e;">⏳ Descanso:</strong>
@@ -392,34 +393,62 @@
   let listaProfessoresCache = [];
   let alunoSelecionadoAtual = null;
 
-  // Estado da Sessão de Treino do Aluno
-  let divisaoTreinoAtiva = null;
-  let treinoIniciadoGeral = false;
-  let exercicioAtivoId = null;
-  let exerciciosConcluidos = new Set();
+  // =========================================================================
+  // GESTÃO DE ESTADO PERSISTENTE DA SESSÃO DO ALUNO (À PROVA DE F5 / TELA BLOQUEADA)
+  // =========================================================================
+  let sessaoTreino = null; 
+  // Estrutura de sessaoTreino salva no localStorage:
+  // {
+  //   divisao: 'A',
+  //   inicioTimestamp: 1694000000, // Real timestamp para calcular tempo exato mesmo com tela apagada
+  //   exercicioAtivoId: 10,
+  //   exercicioInicioTimestamp: 1694000050,
+  //   serieInicioTimestamp: 1694000060,
+  //   seriesConcluidas: { "10": [1, 2] },
+  //   exerciciosConcluidos: [10],
+  //   cargas: { "10": "25" },
+  //   descansoFimTimestamp: null,
+  //   tempoDescansoConfig: 60
+  // }
 
   let timerTreinoInterval = null;
   let timerExercicioInterval = null;
   let timerSerieInterval = null;
   let timerDescansoInterval = null;
-
-  let segTreinoTotal = 0;
-  let segExercicioAtual = 0;
-  let segSerieAtual = 0;
-  let segDescansoRestante = 0;
   let audioContext = null;
 
+  function salvarEstadoSessao() {
+    if (!sessaoTreino || !usuarioLogado) return;
+    localStorage.setItem(`sessao_treino_aluno_${usuarioLogado.id}`, JSON.stringify(sessaoTreino));
+  }
+
+  function limparEstadoSessao() {
+    sessaoTreino = null;
+    if (usuarioLogado) {
+      localStorage.removeItem(`sessao_treino_aluno_${usuarioLogado.id}`);
+    }
+  }
+
+  function recuperarEstadoSessao() {
+    if (!usuarioLogado) return null;
+    const salvo = localStorage.getItem(`sessao_treino_aluno_${usuarioLogado.id}`);
+    if (!salvo) return null;
+    try {
+      return JSON.parse(salvo);
+    } catch (e) {
+      return null;
+    }
+  }
+
   // =========================================================================
-  // CONFIGURAÇÃO OFICIAL DA API (FIXA PARA TODOS OS DISPOSITIVOS NO GITHUB PAGES)
+  // CONFIGURAÇÃO DA API
   // =========================================================================
   const SERVIDOR_CLOUDFLARE = "https://pizza-web-tropical-journey.trycloudflare.com";
 
   function getApiBase() {
-    // Se acessado pelo GitHub Pages, usa o túnel da Raspberry Pi
     if (window.location.hostname.includes('github.io')) {
       return SERVIDOR_CLOUDFLARE.replace(/\/+$/, '') + '/api';
     }
-    // Se acessado pela rede local da Raspberry Pi, usa caminho relativo
     return '/api';
   }
 
@@ -452,7 +481,15 @@
     } else {
       document.getElementById('alunoSection').classList.remove('hidden');
       document.getElementById('alunoNomeDisplay').textContent = "Ol\u00e1, " + usuarioLogado.nome;
-      carregarDivisoesAluno();
+      
+      // Verifica se o aluno já tinha um treino em andamento antes do F5 / recarregamento
+      const sessaoSalva = recuperarEstadoSessao();
+      if (sessaoSalva && sessaoSalva.divisao) {
+        sessaoTreino = sessaoSalva;
+        iniciarTreinoAluno(sessaoSalva.divisao, true); // true = restaurando
+      } else {
+        carregarDivisoesAluno();
+      }
     }
   }
 
@@ -498,6 +535,7 @@
 
   function fazerLogout() {
     pararTodosTimers();
+    limparEstadoSessao();
     localStorage.removeItem('usuarioLogado');
     usuarioLogado = null;
     location.reload();
@@ -817,7 +855,9 @@
       catalogoExercicios.map(e => `<option value="${e.id}">[${e.grupo}] ${e.nome}</option>`).join('');
   }
 
-  // ================= 4. ÁREA DO ALUNO =================
+  // =========================================================================
+  // 4. ÁREA DO ALUNO (SESSÃO PERSISTENTE E RESILIENTE A F5 / TELA BLOQUEADA)
+  // =========================================================================
   async function carregarDivisoesAluno() {
     const container = document.getElementById('gradeDivisoesAluno');
     container.innerHTML = '<span style="color:#666; font-size:13px;">Carregando seus treinos...</span>';
@@ -837,7 +877,7 @@
 
       container.innerHTML = divisoes.map(d => `
         <button class="btn" style="flex: 1; min-width: 140px; font-size: 16px; padding: 14px;" 
-                onclick="iniciarTreinoAluno('${d}')">
+                onclick="iniciarTreinoAluno('${d}', false)">
           Treino ${d}
         </button>
       `).join('');
@@ -846,25 +886,47 @@
     }
   }
 
-  async function iniciarTreinoAluno(tipo) {
-    divisaoTreinoAtiva = tipo;
-    treinoIniciadoGeral = false;
-    exercicioAtivoId = null;
-    exerciciosConcluidos.clear();
+  function ajustarTempoDescanso(seg) {
+    if (sessaoTreino) {
+      sessaoTreino.tempoDescansoConfig = parseInt(seg) || 60;
+      salvarEstadoSessao();
+    }
+  }
+
+  async function iniciarTreinoAluno(tipo, restaurando = false) {
     pararTodosTimers();
 
-    segTreinoTotal = 0;
-    segExercicioAtual = 0;
-    segSerieAtual = 0;
+    if (!restaurando) {
+      // Nova sessão de treino
+      const tempoCfg = parseInt(document.getElementById('tempoDescansoSegundos').value) || 60;
+      sessaoTreino = {
+        divisao: tipo,
+        inicioTimestamp: null,
+        exercicioAtivoId: null,
+        exercicioInicioTimestamp: null,
+        serieInicioTimestamp: null,
+        seriesConcluidas: {},      // { [treinoId]: [1, 2] }
+        exerciciosConcluidos: [],  // [treinoId, ...]
+        cargas: {},                // { [treinoId]: 25 }
+        descansoFimTimestamp: null,
+        tempoDescansoConfig: tempoCfg
+      };
+      salvarEstadoSessao();
+    } else {
+      // Restaurando sessão pós-F5
+      if (sessaoTreino.tempoDescansoConfig) {
+        document.getElementById('tempoDescansoSegundos').value = sessaoTreino.tempoDescansoConfig;
+      }
+    }
 
-    document.getElementById('dispTempoTreino').textContent = "00:00:00";
-    document.getElementById('dispTempoExercicio').textContent = "00:00";
-    document.getElementById('dispTempoSerie').textContent = "00:00";
+    divisaoTreinoAtiva = tipo;
 
+    // Troca de tela
     document.getElementById('alunoSelecaoDivisao').classList.add('hidden');
     document.getElementById('alunoTreinoAtivo').classList.remove('hidden');
     document.getElementById('tituloFichaAtiva').textContent = `Treino ${tipo} em Andamento`;
 
+    // Busca os exercícios do treino
     const res = await fetch(`${getApiBase()}/aluno/${usuarioLogado.id}/treino/${tipo}`);
     const treinos = await res.json();
     const container = document.getElementById('containerExerciciosFicha');
@@ -890,6 +952,9 @@
         `;
       }
 
+      // Carga salva na sessão ou a última carga registrada
+      const cargaInicial = (sessaoTreino.cargas && sessaoTreino.cargas[t.id]) ? sessaoTreino.cargas[t.id] : (t.ultima_carga || 0);
+
       return `
         <div class="exercicio-card" id="cardExercicio_${t.id}">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
@@ -907,7 +972,8 @@
 
           <div style="display: flex; gap: 10px; align-items: center; margin: 10px 0 6px;">
             <label style="margin: 0; font-size: 12px;">Carga usada (kg):</label>
-            <input type="number" id="carga_${t.id}" value="${t.ultima_carga || 0}" 
+            <input type="number" id="carga_${t.id}" value="${cargaInicial}" 
+                   onchange="atualizarCargaSessao(${t.id}, this.value)"
                    style="max-width: 90px; padding: 6px; margin: 0; font-weight: bold;">
             <small style="color: #777;">(anterior: ${t.ultima_carga || 0} kg)</small>
           </div>
@@ -918,35 +984,103 @@
         </div>
       `;
     }).join('');
+
+    // Se estiver restaurando, reaplica o estado visual exato de cada card e série
+    if (restaurando) {
+      restaurarEstadoVisualTreino(treinos);
+    }
   }
 
-  // --- ACIONAR EXERCÍCIO ESCOLHIDO PELO ALUNO ---
-  function iniciarExercicio(treinoId) {
-    if (exercicioAtivoId !== null) return;
-
-    exercicioAtivoId = treinoId;
-
-    if (!treinoIniciadoGeral) {
-      treinoIniciadoGeral = true;
-      timerTreinoInterval = setInterval(() => {
-        segTreinoTotal++;
-        document.getElementById('dispTempoTreino').textContent = formatarSegundos(segTreinoTotal, true);
-      }, 1000);
+  function restaurarEstadoVisualTreino(treinos) {
+    // 1. Restaura séries concluídas
+    if (sessaoTreino.seriesConcluidas) {
+      Object.keys(sessaoTreino.seriesConcluidas).forEach(treinoId => {
+        const series = sessaoTreino.seriesConcluidas[treinoId] || [];
+        series.forEach(s => {
+          const btn = document.getElementById(`btnSerie_${treinoId}_${s}`);
+          const row = document.getElementById(`serieRow_${treinoId}_${s}`);
+          if (btn && row) {
+            btn.disabled = true;
+            btn.textContent = "✓ Feito";
+            btn.className = "btn-sm btn-success";
+            row.classList.add('serie-concluida');
+          }
+        });
+      });
     }
 
-    clearInterval(timerExercicioInterval);
-    segExercicioAtual = 0;
-    timerExercicioInterval = setInterval(() => {
-      segExercicioAtual++;
-      document.getElementById('dispTempoExercicio').textContent = formatarSegundos(segExercicioAtual, false);
-    }, 1000);
+    // 2. Restaura exercícios finalizados
+    if (sessaoTreino.exerciciosConcluidos) {
+      sessaoTreino.exerciciosConcluidos.forEach(treinoId => {
+        const card = document.getElementById(`cardExercicio_${treinoId}`);
+        const acoes = document.getElementById(`acoesExercicio_${treinoId}`);
+        if (card && acoes) {
+          card.classList.add('finalizado');
+          acoes.innerHTML = `<span class="badge" style="background:#64748b; color:#fff; font-size:12px; padding:6px 10px;">✓ Concluído</span>`;
+        }
+      });
+    }
 
-    clearInterval(timerSerieInterval);
-    segSerieAtual = 0;
-    timerSerieInterval = setInterval(() => {
-      segSerieAtual++;
-      document.getElementById('dispTempoSerie').textContent = formatarSegundos(segSerieAtual, false);
-    }, 1000);
+    // 3. Se havia um exercício em andamento
+    if (sessaoTreino.exercicioAtivoId) {
+      const ativoId = sessaoTreino.exercicioAtivoId;
+      const cardAtivo = document.getElementById(`cardExercicio_${ativoId}`);
+      const acoes = document.getElementById(`acoesExercicio_${ativoId}`);
+
+      if (cardAtivo && acoes) {
+        cardAtivo.classList.add('em-execucao');
+        acoes.innerHTML = `<span class="badge" style="background:#22c55e; color:#fff; font-size:12px; padding:6px 10px;">▶ Em Execução</span>`;
+
+        // Bloqueia os outros
+        document.querySelectorAll('.exercicio-card').forEach(card => {
+          if (card.id !== `cardExercicio_${ativoId}`) {
+            card.classList.add('bloqueado');
+          }
+        });
+
+        // Descobre qual é a próxima série pendente para habilitar
+        const concluidas = (sessaoTreino.seriesConcluidas && sessaoTreino.seriesConcluidas[ativoId]) || [];
+        const proximaSerie = concluidas.length + 1;
+        const btnProx = document.getElementById(`btnSerie_${ativoId}_${proximaSerie}`);
+        if (btnProx) {
+          btnProx.disabled = false;
+          btnProx.className = "btn-sm btn-primary";
+        }
+      }
+    }
+
+    // 4. Inicia os cronômetros a partir dos timestamps reais
+    iniciarLoopsCronometros();
+
+    // 5. Se o descanso estava rolando antes do F5
+    if (sessaoTreino.descansoFimTimestamp && sessaoTreino.descansoFimTimestamp > Date.now()) {
+      iniciarLoopDescanso();
+    }
+  }
+
+  function atualizarCargaSessao(treinoId, valor) {
+    if (sessaoTreino) {
+      sessaoTreino.cargas[treinoId] = valor;
+      salvarEstadoSessao();
+    }
+  }
+
+  // --- ACIONAR EXERCÍCIO ---
+  function iniciarExercicio(treinoId) {
+    if (sessaoTreino.exercicioAtivoId !== null) return;
+
+    sessaoTreino.exercicioAtivoId = treinoId;
+
+    // Se é o primeiro exercício de todo o treino, grava a hora de início geral
+    if (!sessaoTreino.inicioTimestamp) {
+      sessaoTreino.inicioTimestamp = Date.now();
+    }
+
+    sessaoTreino.exercicioInicioTimestamp = Date.now();
+    sessaoTreino.serieInicioTimestamp = Date.now();
+    salvarEstadoSessao();
+
+    iniciarLoopsCronometros();
 
     const cardAtivo = document.getElementById(`cardExercicio_${treinoId}`);
     cardAtivo.classList.add('em-execucao');
@@ -955,15 +1089,69 @@
       <span class="badge" style="background:#22c55e; color:#fff; font-size:12px; padding:6px 10px;">▶ Em Execução</span>
     `;
 
+    // Habilita a Série 1
     const btnS1 = document.getElementById(`btnSerie_${treinoId}_1`);
     btnS1.disabled = false;
     btnS1.className = "btn-sm btn-primary";
 
+    // Bloqueia os outros exercícios
     document.querySelectorAll('.exercicio-card').forEach(card => {
       if (card.id !== `cardExercicio_${treinoId}`) {
         card.classList.add('bloqueado');
       }
     });
+  }
+
+  // --- CRONÔMETROS BASEADOS EM TEMPO REAL ---
+  function iniciarLoopsCronometros() {
+    pararTimersExecucao();
+
+    // Loop do tempo total do treino
+    if (sessaoTreino && sessaoTreino.inicioTimestamp) {
+      atualizarDisplayTreino();
+      timerTreinoInterval = setInterval(atualizarDisplayTreino, 1000);
+    }
+
+    // Loop do tempo no exercício
+    if (sessaoTreino && sessaoTreino.exercicioInicioTimestamp) {
+      atualizarDisplayExercicio();
+      timerExercicioInterval = setInterval(atualizarDisplayExercicio, 1000);
+    }
+
+    // Loop do tempo da série
+    if (sessaoTreino && sessaoTreino.serieInicioTimestamp) {
+      atualizarDisplaySerie();
+      timerSerieInterval = setInterval(atualizarDisplaySerie, 1000);
+    }
+  }
+
+  function atualizarDisplayTreino() {
+    if (!sessaoTreino || !sessaoTreino.inicioTimestamp) return;
+    const seg = Math.max(0, Math.floor((Date.now() - sessaoTreino.inicioTimestamp) / 1000));
+    document.getElementById('dispTempoTreino').textContent = formatarSegundos(seg, true);
+  }
+
+  function atualizarDisplayExercicio() {
+    if (!sessaoTreino || !sessaoTreino.exercicioInicioTimestamp) return;
+    const seg = Math.max(0, Math.floor((Date.now() - sessaoTreino.exercicioInicioTimestamp) / 1000));
+    document.getElementById('dispTempoExercicio').textContent = formatarSegundos(seg, false);
+  }
+
+  function atualizarDisplaySerie() {
+    if (!sessaoTreino || !sessaoTreino.serieInicioTimestamp) return;
+    const seg = Math.max(0, Math.floor((Date.now() - sessaoTreino.serieInicioTimestamp) / 1000));
+    document.getElementById('dispTempoSerie').textContent = formatarSegundos(seg, false);
+  }
+
+  function pararTimersExecucao() {
+    clearInterval(timerTreinoInterval);
+    clearInterval(timerExercicioInterval);
+    clearInterval(timerSerieInterval);
+  }
+
+  function pararTodosTimers() {
+    pararTimersExecucao();
+    clearInterval(timerDescansoInterval);
   }
 
   // --- CONCLUSÃO DE SÉRIE ---
@@ -978,8 +1166,17 @@
     btnAtual.className = "btn-sm btn-success";
     rowAtual.classList.add('serie-concluida');
 
-    segSerieAtual = 0;
+    // Registra na sessão persistente
+    if (!sessaoTreino.seriesConcluidas[treinoId]) {
+      sessaoTreino.seriesConcluidas[treinoId] = [];
+    }
+    if (!sessaoTreino.seriesConcluidas[treinoId].includes(numSerie)) {
+      sessaoTreino.seriesConcluidas[treinoId].push(numSerie);
+    }
+    sessaoTreino.cargas[treinoId] = carga;
+    sessaoTreino.serieInicioTimestamp = Date.now(); // Reseta relógio da série
 
+    // Salva no backend
     fetch(`${getApiBase()}/aluno/execucao`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -987,13 +1184,20 @@
     });
 
     if (numSerie < totalSeries) {
+      // Habilita a próxima série
       const proximoNum = numSerie + 1;
       const btnProximo = document.getElementById(`btnSerie_${treinoId}_${proximoNum}`);
       btnProximo.disabled = false;
       btnProximo.className = "btn-sm btn-primary";
 
-      iniciarDescanso();
+      // Dispara o descanso
+      const tempoCfg = sessaoTreino.tempoDescansoConfig || 60;
+      sessaoTreino.descansoFimTimestamp = Date.now() + (tempoCfg * 1000);
+      salvarEstadoSessao();
+
+      iniciarLoopDescanso();
     } else {
+      // Concluiu todas as séries deste exercício
       finalizarExercicioAtivo(treinoId);
     }
   }
@@ -1002,8 +1206,19 @@
     clearInterval(timerExercicioInterval);
     clearInterval(timerSerieInterval);
 
-    exerciciosConcluidos.add(treinoId);
-    exercicioAtivoId = null;
+    if (!sessaoTreino.exerciciosConcluidos.includes(treinoId)) {
+      sessaoTreino.exerciciosConcluidos.push(treinoId);
+    }
+    sessaoTreino.exercicioAtivoId = null;
+    sessaoTreino.exercicioInicioTimestamp = null;
+    sessaoTreino.serieInicioTimestamp = null;
+    sessaoTreino.descansoFimTimestamp = null;
+    salvarEstadoSessao();
+
+    pularDescanso();
+
+    document.getElementById('dispTempoExercicio').textContent = "00:00";
+    document.getElementById('dispTempoSerie').textContent = "00:00";
 
     const card = document.getElementById(`cardExercicio_${treinoId}`);
     card.classList.remove('em-execucao');
@@ -1013,46 +1228,56 @@
       <span class="badge" style="background:#64748b; color:#fff; font-size:12px; padding:6px 10px;">✓ Concluído</span>
     `;
 
+    // Desbloqueia os exercícios pendentes
     document.querySelectorAll('.exercicio-card').forEach(c => {
       const idStr = c.id.replace('cardExercicio_', '');
       const cId = parseInt(idStr);
-      if (!exerciciosConcluidos.has(cId)) {
+      if (!sessaoTreino.exerciciosConcluidos.includes(cId)) {
         c.classList.remove('bloqueado');
       }
     });
 
     tocarAlertaSonoro(false);
 
+    // Verifica se finalizou todos os exercícios da ficha
     const totalCards = document.querySelectorAll('.exercicio-card').length;
-    if (exerciciosConcluidos.size === totalCards) {
+    if (sessaoTreino.exerciciosConcluidos.length === totalCards) {
       alert("🎉 Parabéns! Você concluiu todos os exercícios deste treino!");
     }
   }
 
   // --- DESCANSO ---
-  function iniciarDescanso() {
+  function iniciarLoopDescanso() {
     clearInterval(timerDescansoInterval);
-    const tempoCfg = parseInt(document.getElementById('tempoDescansoSegundos').value) || 60;
-    segDescansoRestante = tempoCfg;
-
     const boxDescanso = document.getElementById('boxDescansoRegressivo');
     boxDescanso.classList.remove('hidden');
-    document.getElementById('dispDescansoRestante').textContent = formatarSegundos(segDescansoRestante, false);
 
-    timerDescansoInterval = setInterval(() => {
-      segDescansoRestante--;
-      document.getElementById('dispDescansoRestante').textContent = formatarSegundos(segDescansoRestante, false);
+    function tickDescanso() {
+      if (!sessaoTreino || !sessaoTreino.descansoFimTimestamp) {
+        pularDescanso();
+        return;
+      }
+      const restanteMs = sessaoTreino.descansoFimTimestamp - Date.now();
+      const restanteSeg = Math.max(0, Math.ceil(restanteMs / 1000));
 
-      if (segDescansoRestante <= 0) {
-        clearInterval(timerDescansoInterval);
-        boxDescanso.classList.add('hidden');
+      document.getElementById('dispDescansoRestante').textContent = formatarSegundos(restanteSeg, false);
+
+      if (restanteSeg <= 0) {
+        pularDescanso();
         tocarAlertaSonoro(true);
       }
-    }, 1000);
+    }
+
+    tickDescanso();
+    timerDescansoInterval = setInterval(tickDescanso, 1000);
   }
 
   function pularDescanso() {
     clearInterval(timerDescansoInterval);
+    if (sessaoTreino) {
+      sessaoTreino.descansoFimTimestamp = null;
+      salvarEstadoSessao();
+    }
     document.getElementById('boxDescansoRegressivo').classList.add('hidden');
   }
 
@@ -1075,13 +1300,6 @@
     } catch (e) {}
   }
 
-  function pararTodosTimers() {
-    clearInterval(timerTreinoInterval);
-    clearInterval(timerExercicioInterval);
-    clearInterval(timerSerieInterval);
-    clearInterval(timerDescansoInterval);
-  }
-
   function formatarSegundos(totalSegundos, comHoras) {
     const h = Math.floor(totalSegundos / 3600);
     const m = Math.floor((totalSegundos % 3600) / 60);
@@ -1093,18 +1311,23 @@
   }
 
   function voltarParaSelecaoTreino() {
-    if (confirm("Deseja interromper o treino em andamento e voltar para a seleção?")) {
+    if (confirm("Deseja interromper o treino atual e descartar a sessão em andamento?")) {
       pararTodosTimers();
+      limparEstadoSessao();
       document.getElementById('alunoTreinoAtivo').classList.add('hidden');
       document.getElementById('alunoSelecaoDivisao').classList.remove('hidden');
+      carregarDivisoesAluno();
     }
   }
 
   function finalizarTreinoAluno() {
-    if (confirm(`Finalizar o treino de hoje?\nTempo total: ${formatarSegundos(segTreinoTotal, true)}`)) {
+    const segTotal = sessaoTreino && sessaoTreino.inicioTimestamp ? Math.floor((Date.now() - sessaoTreino.inicioTimestamp)/1000) : 0;
+    if (confirm(`Finalizar o treino de hoje?\nTempo total: ${formatarSegundos(segTotal, true)}`)) {
       pararTodosTimers();
+      limparEstadoSessao();
       document.getElementById('alunoTreinoAtivo').classList.add('hidden');
       document.getElementById('alunoSelecaoDivisao').classList.remove('hidden');
+      carregarDivisoesAluno();
     }
   }
 </script>
