@@ -111,7 +111,7 @@
 
 <div class="container">
 
-  <!-- ================= 1. LOGIN ================= -->
+  <!-- ================= 1. LOGIN (SEM CONFIGURAÇÃO LOCAL) ================= -->
   <div id="authSection" class="card" style="max-width: 400px; margin: 40px auto;">
     <h2>Acesso ao Sistema</h2>
     <label>Identifique seu Perfil:</label>
@@ -126,17 +126,7 @@
     <label>Senha:</label>
     <input type="password" id="loginSenha" placeholder="Digite sua senha">
 
-    <button style="width: 100%; margin-bottom: 12px;" onclick="fazerLogin()">Entrar</button>
-
-    <!-- Configuração para o GitHub Pages conectar à Raspberry Pi -->
-    <details style="margin-top: 10px; font-size: 12px; color: #666;">
-      <summary style="cursor: pointer; color: var(--primary);">⚙️ Configurar Servidor da Academia</summary>
-      <div style="margin-top: 8px;">
-        <label style="font-size: 11px;">URL do Cloudflare da Raspberry Pi:</label>
-        <input type="text" id="cfgApiUrl" placeholder="https://seu-tunel.trycloudflare.com" style="padding: 6px; font-size: 12px; margin-bottom: 6px;">
-        <button class="btn-sm btn-secondary" style="width: 100%;" onclick="salvarConfigServidor()">Salvar Servidor</button>
-      </div>
-    </details>
+    <button style="width: 100%;" onclick="fazerLogin()">Entrar</button>
   </div>
 
   <!-- ================= MODAL PRIMEIRO ACESSO ================= -->
@@ -419,30 +409,22 @@
   let segDescansoRestante = 0;
   let audioContext = null;
 
-  // ----------------- CONFIGURAÇÃO DE URL (LOCAL vs GITHUB PAGES) -----------------
-  function getApiBase() {
-    if (window.location.hostname.includes('github.io')) {
-      const customUrl = localStorage.getItem('servidor_academia_url') || '';
-      return customUrl ? customUrl.replace(/\/+$/, '') + '/api' : '/api';
-    }
-    return '/api';
-  }
+  // =========================================================================
+  // CONFIGURAÇÃO OFICIAL DA API (FIXA PARA TODOS OS DISPOSITIVOS NO GITHUB PAGES)
+  // =========================================================================
+  const SERVIDOR_CLOUDFLARE = "https://pizza-web-tropical-journey.trycloudflare.com";
 
-  function salvarConfigServidor() {
-    const url = document.getElementById('cfgApiUrl').value.trim();
-    if (!url) {
-      alert("Digite a URL do túnel Cloudflare da sua Raspberry Pi.");
-      return;
+  function getApiBase() {
+    // Se acessado pelo GitHub Pages, usa o túnel da Raspberry Pi
+    if (window.location.hostname.includes('github.io')) {
+      return SERVIDOR_CLOUDFLARE.replace(/\/+$/, '') + '/api';
     }
-    localStorage.setItem('servidor_academia_url', url);
-    alert("Endereço do servidor salvo com sucesso!");
+    // Se acessado pela rede local da Raspberry Pi, usa caminho relativo
+    return '/api';
   }
 
   // ----------------- INICIALIZAÇÃO / SESSÃO -----------------
   window.addEventListener('DOMContentLoaded', () => {
-    const salvoServidor = localStorage.getItem('servidor_academia_url');
-    const inputCfg = document.getElementById('cfgApiUrl');
-    if (salvoServidor && inputCfg) inputCfg.value = salvoServidor;
     restaurarSessao();
   });
 
@@ -477,30 +459,41 @@
   // ----------------- LOGIN / LOGOUT -----------------
   async function fazerLogin() {
     const perfil = document.getElementById('loginPerfil').value;
-    const cpf = document.getElementById('loginCpf').value;
+    const cpf = document.getElementById('loginCpf').value.trim();
     const senha = document.getElementById('loginSenha').value;
 
-    const res = await fetch(`${getApiBase()}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ perfil, cpf, senha })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.erro || 'Falha no login');
+    if (!cpf || !senha) {
+      alert("Por favor, preencha CPF e senha.");
       return;
     }
 
-    usuarioLogado = data.usuario;
+    try {
+      const res = await fetch(`${getApiBase()}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ perfil, cpf, senha })
+      });
 
-    if (usuarioLogado.primeiro_acesso) {
-      document.getElementById('modalPrimeiroAcesso').classList.remove('hidden');
-      usuarioLogado.primeiro_acesso = false;
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.erro || 'Falha no login');
+        return;
+      }
+
+      usuarioLogado = data.usuario;
+
+      if (usuarioLogado.primeiro_acesso) {
+        document.getElementById('modalPrimeiroAcesso').classList.remove('hidden');
+        usuarioLogado.primeiro_acesso = false;
+      }
+
+      localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
+      iniciarInterfacePorPerfil();
+
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao conectar com o servidor da academia. Verifique se o túnel da Raspberry Pi está online.");
     }
-
-    localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
-    iniciarInterfacePorPerfil();
   }
 
   function fazerLogout() {
@@ -933,7 +926,6 @@
 
     exercicioAtivoId = treinoId;
 
-    // Cronômetro do treino total só inicia ao disparar o primeiro exercício
     if (!treinoIniciadoGeral) {
       treinoIniciadoGeral = true;
       timerTreinoInterval = setInterval(() => {
