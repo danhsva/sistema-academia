@@ -138,7 +138,7 @@
     <input type="password" id="loginSenha" placeholder="Digite sua senha">
 
     <button id="btnEntrar" style="width: 100%;" onclick="fazerLogin()">Entrar</button>
-    <div id="statusConexao" class="hidden" style="font-size: 12px; text-align: center; margin-top: 12px; color: #888;">
+    <div id="statusConexao" style="font-size: 12px; text-align: center; margin-top: 12px; color: #888;">
       Conectando &agrave; academia...
     </div>
   </div>
@@ -405,7 +405,7 @@
   // DETECÇÃO DE AMBIENTE: GITHUB PAGES vs RASPBERRY PI
   // =========================================================================
   const IS_GITHUB_PAGES = window.location.hostname.includes('github.io');
-  let servidorBaseUrl = ""; // Alimentado dinamicamente via servidor.json no GitHub
+  let servidorBaseUrl = "https://eclipse-humor-plant-feedback.trycloudflare.com"; // Alimentado dinamicamente via servidor.json no GitHub
 
   let usuarioLogado = null;
   let catalogoExercicios = [];
