@@ -105,15 +105,26 @@
       background: #ffffff; border-radius: 10px; padding: 22px; width: 100%; max-width: 400px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     }
+
+    /* Estilo Especial quando no GitHub Pages (Modo Portal de Entrada) */
+    body.mode-portal {
+      display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px 12px;
+    }
+    body.mode-portal .container { width: 100%; max-width: 400px; }
+    body.mode-portal #profSection, body.mode-portal #alunoSection { display: none !important; }
   </style>
 </head>
 <body>
 
 <div class="container">
 
-  <!-- ================= 1. LOGIN ================= -->
+  <!-- ================= 1. LOGIN / PORTAL DE ENTRADA ================= -->
   <div id="authSection" class="card" style="max-width: 400px; margin: 40px auto;">
     <h2>Acesso ao Sistema</h2>
+    <p id="portalSubtitulo" class="hidden" style="font-size: 13px; color: #666; margin-bottom: 14px;">
+      Gest&atilde;o de Treinos da Academia
+    </p>
+
     <label>Identifique seu Perfil:</label>
     <select id="loginPerfil">
       <option value="aluno">Aluno</option>
@@ -126,7 +137,10 @@
     <label>Senha:</label>
     <input type="password" id="loginSenha" placeholder="Digite sua senha">
 
-    <button style="width: 100%;" onclick="fazerLogin()">Entrar</button>
+    <button id="btnEntrar" style="width: 100%;" onclick="fazerLogin()">Entrar</button>
+    <div id="statusConexao" class="hidden" style="font-size: 12px; text-align: center; margin-top: 12px; color: #888;">
+      Conectando &agrave; academia...
+    </div>
   </div>
 
   <!-- ================= MODAL PRIMEIRO ACESSO ================= -->
@@ -145,7 +159,7 @@
     </div>
   </div>
 
-  <!-- ================= 2. PAINEL DO PROFESSOR ================= -->
+  <!-- ================= 2. PAINEL DO PROFESSOR (RODA NA PI) ================= -->
   <div id="profSection" class="hidden">
     <div class="top-bar">
       <div>
@@ -316,7 +330,7 @@
     </div>
   </div>
 
-  <!-- ================= 3. PAINEL DO ALUNO ================= -->
+  <!-- ================= 3. PAINEL DO ALUNO (RODA NA PI) ================= -->
   <div id="alunoSection" class="hidden">
     <div class="top-bar">
       <div>
@@ -387,30 +401,20 @@
 </div>
 
 <script>
+  // =========================================================================
+  // DETECÇÃO DE AMBIENTE: GITHUB PAGES vs RASPBERRY PI
+  // =========================================================================
+  const IS_GITHUB_PAGES = window.location.hostname.includes('github.io');
+  let servidorBaseUrl = ""; // Alimentado dinamicamente via servidor.json no GitHub
+
   let usuarioLogado = null;
   let catalogoExercicios = [];
   let listaAlunosCache = [];
   let listaProfessoresCache = [];
   let alunoSelecionadoAtual = null;
 
-  // =========================================================================
-  // GESTÃO DE ESTADO PERSISTENTE DA SESSÃO DO ALUNO (À PROVA DE F5 / TELA BLOQUEADA)
-  // =========================================================================
-  let sessaoTreino = null; 
-  // Estrutura de sessaoTreino salva no localStorage:
-  // {
-  //   divisao: 'A',
-  //   inicioTimestamp: 1694000000, // Real timestamp para calcular tempo exato mesmo com tela apagada
-  //   exercicioAtivoId: 10,
-  //   exercicioInicioTimestamp: 1694000050,
-  //   serieInicioTimestamp: 1694000060,
-  //   seriesConcluidas: { "10": [1, 2] },
-  //   exerciciosConcluidos: [10],
-  //   cargas: { "10": "25" },
-  //   descansoFimTimestamp: null,
-  //   tempoDescansoConfig: 60
-  // }
-
+  // Estado da Sessão de Treino do Aluno (Persistente)
+  let sessaoTreino = null;
   let timerTreinoInterval = null;
   let timerExercicioInterval = null;
   let timerSerieInterval = null;
@@ -440,22 +444,54 @@
     }
   }
 
-  // =========================================================================
-  // CONFIGURAÇÃO DA API
-  // =========================================================================
-  const SERVIDOR_CLOUDFLARE = "https://pizza-web-tropical-journey.trycloudflare.com";
-
   function getApiBase() {
-    if (window.location.hostname.includes('github.io')) {
-      return SERVIDOR_CLOUDFLARE.replace(/\/+$/, '') + '/api';
+    if (IS_GITHUB_PAGES) {
+      return servidorBaseUrl ? servidorBaseUrl.replace(/\/+$/, '') + '/api' : '/api';
     }
     return '/api';
   }
 
-  // ----------------- INICIALIZAÇÃO / SESSÃO -----------------
+  // ----------------- INICIALIZAÇÃO ADAPTATIVA -----------------
   window.addEventListener('DOMContentLoaded', () => {
-    restaurarSessao();
+    if (IS_GITHUB_PAGES) {
+      // MODO 1: GITHUB PAGES (APENAS PORTAL DE LOGIN)
+      document.body.classList.add('mode-portal');
+      document.getElementById('portalSubtitulo').classList.remove('hidden');
+      document.getElementById('statusConexao').classList.remove('hidden');
+      document.getElementById('authSection').classList.remove('hidden');
+      document.getElementById('profSection').classList.add('hidden');
+      document.getElementById('alunoSection').classList.add('hidden');
+      carregarServidorAtivoGitHub();
+    } else {
+      // MODO 2: RASPBERRY PI (APLICAÇÃO COMPLETA)
+      // Verifica se veio redirecionado do login do GitHub com sessão na URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessaoParam = urlParams.get('sessao');
+      if (sessaoParam) {
+        try {
+          localStorage.setItem('usuarioLogado', decodeURIComponent(sessaoParam));
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch(e) {}
+      }
+      restaurarSessao();
+    }
   });
+
+  // Lê a URL atualizada da Raspberry Pi a partir do servidor.json no repositório
+  async function carregarServidorAtivoGitHub() {
+    try {
+      const res = await fetch(`servidor.json?t=${Date.now()}`);
+      const data = await res.json();
+      servidorBaseUrl = data.url.replace(/\/+$/, '');
+      const st = document.getElementById('statusConexao');
+      st.textContent = "● Servidor conectado";
+      st.style.color = "#16a34a";
+    } catch (err) {
+      const st = document.getElementById('statusConexao');
+      st.textContent = "⚠️ Servidor da academia offline";
+      st.style.color = "#dc2626";
+    }
+  }
 
   function restaurarSessao() {
     const salvo = localStorage.getItem('usuarioLogado');
@@ -481,12 +517,11 @@
     } else {
       document.getElementById('alunoSection').classList.remove('hidden');
       document.getElementById('alunoNomeDisplay').textContent = "Ol\u00e1, " + usuarioLogado.nome;
-      
-      // Verifica se o aluno já tinha um treino em andamento antes do F5 / recarregamento
+
       const sessaoSalva = recuperarEstadoSessao();
       if (sessaoSalva && sessaoSalva.divisao) {
         sessaoTreino = sessaoSalva;
-        iniciarTreinoAluno(sessaoSalva.divisao, true); // true = restaurando
+        iniciarTreinoAluno(sessaoSalva.divisao, true);
       } else {
         carregarDivisoesAluno();
       }
@@ -504,8 +539,13 @@
       return;
     }
 
+    const btn = document.getElementById('btnEntrar');
+    btn.disabled = true;
+    btn.textContent = "Entrando...";
+
     try {
-      const res = await fetch(`${getApiBase()}/auth/login`, {
+      const urlLogin = `${getApiBase()}/auth/login`;
+      const res = await fetch(urlLogin, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ perfil, cpf, senha })
@@ -514,22 +554,31 @@
       const data = await res.json();
       if (!res.ok) {
         alert(data.erro || 'Falha no login');
+        btn.disabled = false;
+        btn.textContent = "Entrar";
         return;
       }
 
-      usuarioLogado = data.usuario;
-
-      if (usuarioLogado.primeiro_acesso) {
-        document.getElementById('modalPrimeiroAcesso').classList.remove('hidden');
-        usuarioLogado.primeiro_acesso = false;
+      if (IS_GITHUB_PAGES) {
+        // No GitHub Pages: redireciona para a Raspberry Pi já entrando com a sessão pronta
+        const sessaoParam = encodeURIComponent(JSON.stringify(data.usuario));
+        window.location.href = `${servidorBaseUrl}/?sessao=${sessaoParam}`;
+      } else {
+        // Na Raspberry Pi: entra no painel local imediatamente
+        usuarioLogado = data.usuario;
+        if (usuarioLogado.primeiro_acesso) {
+          document.getElementById('modalPrimeiroAcesso').classList.remove('hidden');
+          usuarioLogado.primeiro_acesso = false;
+        }
+        localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
+        iniciarInterfacePorPerfil();
       }
-
-      localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
-      iniciarInterfacePorPerfil();
 
     } catch (err) {
       console.error(err);
-      alert("Erro ao conectar com o servidor da academia. Verifique se o túnel da Raspberry Pi está online.");
+      alert("Erro ao conectar com a academia. Verifique se o túnel da Raspberry Pi está online.");
+      btn.disabled = false;
+      btn.textContent = "Entrar";
     }
   }
 
@@ -541,7 +590,7 @@
     location.reload();
   }
 
-  // ----------------- TROCA DE SENHA -----------------
+  // ----------------- MODAL TROCA DE SENHA -----------------
   function fecharModalSenha() {
     document.getElementById('modalPrimeiroAcesso').classList.add('hidden');
   }
@@ -897,7 +946,6 @@
     pararTodosTimers();
 
     if (!restaurando) {
-      // Nova sessão de treino
       const tempoCfg = parseInt(document.getElementById('tempoDescansoSegundos').value) || 60;
       sessaoTreino = {
         divisao: tipo,
@@ -905,15 +953,14 @@
         exercicioAtivoId: null,
         exercicioInicioTimestamp: null,
         serieInicioTimestamp: null,
-        seriesConcluidas: {},      // { [treinoId]: [1, 2] }
-        exerciciosConcluidos: [],  // [treinoId, ...]
-        cargas: {},                // { [treinoId]: 25 }
+        seriesConcluidas: {},
+        exerciciosConcluidos: [],
+        cargas: {},
         descansoFimTimestamp: null,
         tempoDescansoConfig: tempoCfg
       };
       salvarEstadoSessao();
     } else {
-      // Restaurando sessão pós-F5
       if (sessaoTreino.tempoDescansoConfig) {
         document.getElementById('tempoDescansoSegundos').value = sessaoTreino.tempoDescansoConfig;
       }
@@ -921,12 +968,10 @@
 
     divisaoTreinoAtiva = tipo;
 
-    // Troca de tela
     document.getElementById('alunoSelecaoDivisao').classList.add('hidden');
     document.getElementById('alunoTreinoAtivo').classList.remove('hidden');
     document.getElementById('tituloFichaAtiva').textContent = `Treino ${tipo} em Andamento`;
 
-    // Busca os exercícios do treino
     const res = await fetch(`${getApiBase()}/aluno/${usuarioLogado.id}/treino/${tipo}`);
     const treinos = await res.json();
     const container = document.getElementById('containerExerciciosFicha');
@@ -952,7 +997,6 @@
         `;
       }
 
-      // Carga salva na sessão ou a última carga registrada
       const cargaInicial = (sessaoTreino.cargas && sessaoTreino.cargas[t.id]) ? sessaoTreino.cargas[t.id] : (t.ultima_carga || 0);
 
       return `
@@ -985,14 +1029,12 @@
       `;
     }).join('');
 
-    // Se estiver restaurando, reaplica o estado visual exato de cada card e série
     if (restaurando) {
       restaurarEstadoVisualTreino(treinos);
     }
   }
 
   function restaurarEstadoVisualTreino(treinos) {
-    // 1. Restaura séries concluídas
     if (sessaoTreino.seriesConcluidas) {
       Object.keys(sessaoTreino.seriesConcluidas).forEach(treinoId => {
         const series = sessaoTreino.seriesConcluidas[treinoId] || [];
@@ -1009,7 +1051,6 @@
       });
     }
 
-    // 2. Restaura exercícios finalizados
     if (sessaoTreino.exerciciosConcluidos) {
       sessaoTreino.exerciciosConcluidos.forEach(treinoId => {
         const card = document.getElementById(`cardExercicio_${treinoId}`);
@@ -1021,7 +1062,6 @@
       });
     }
 
-    // 3. Se havia um exercício em andamento
     if (sessaoTreino.exercicioAtivoId) {
       const ativoId = sessaoTreino.exercicioAtivoId;
       const cardAtivo = document.getElementById(`cardExercicio_${ativoId}`);
@@ -1031,14 +1071,12 @@
         cardAtivo.classList.add('em-execucao');
         acoes.innerHTML = `<span class="badge" style="background:#22c55e; color:#fff; font-size:12px; padding:6px 10px;">▶ Em Execução</span>`;
 
-        // Bloqueia os outros
         document.querySelectorAll('.exercicio-card').forEach(card => {
           if (card.id !== `cardExercicio_${ativoId}`) {
             card.classList.add('bloqueado');
           }
         });
 
-        // Descobre qual é a próxima série pendente para habilitar
         const concluidas = (sessaoTreino.seriesConcluidas && sessaoTreino.seriesConcluidas[ativoId]) || [];
         const proximaSerie = concluidas.length + 1;
         const btnProx = document.getElementById(`btnSerie_${ativoId}_${proximaSerie}`);
@@ -1049,10 +1087,8 @@
       }
     }
 
-    // 4. Inicia os cronômetros a partir dos timestamps reais
     iniciarLoopsCronometros();
 
-    // 5. Se o descanso estava rolando antes do F5
     if (sessaoTreino.descansoFimTimestamp && sessaoTreino.descansoFimTimestamp > Date.now()) {
       iniciarLoopDescanso();
     }
@@ -1065,13 +1101,11 @@
     }
   }
 
-  // --- ACIONAR EXERCÍCIO ---
   function iniciarExercicio(treinoId) {
     if (sessaoTreino.exercicioAtivoId !== null) return;
 
     sessaoTreino.exercicioAtivoId = treinoId;
 
-    // Se é o primeiro exercício de todo o treino, grava a hora de início geral
     if (!sessaoTreino.inicioTimestamp) {
       sessaoTreino.inicioTimestamp = Date.now();
     }
@@ -1089,12 +1123,10 @@
       <span class="badge" style="background:#22c55e; color:#fff; font-size:12px; padding:6px 10px;">▶ Em Execução</span>
     `;
 
-    // Habilita a Série 1
     const btnS1 = document.getElementById(`btnSerie_${treinoId}_1`);
     btnS1.disabled = false;
     btnS1.className = "btn-sm btn-primary";
 
-    // Bloqueia os outros exercícios
     document.querySelectorAll('.exercicio-card').forEach(card => {
       if (card.id !== `cardExercicio_${treinoId}`) {
         card.classList.add('bloqueado');
@@ -1102,23 +1134,19 @@
     });
   }
 
-  // --- CRONÔMETROS BASEADOS EM TEMPO REAL ---
   function iniciarLoopsCronometros() {
     pararTimersExecucao();
 
-    // Loop do tempo total do treino
     if (sessaoTreino && sessaoTreino.inicioTimestamp) {
       atualizarDisplayTreino();
       timerTreinoInterval = setInterval(atualizarDisplayTreino, 1000);
     }
 
-    // Loop do tempo no exercício
     if (sessaoTreino && sessaoTreino.exercicioInicioTimestamp) {
       atualizarDisplayExercicio();
       timerExercicioInterval = setInterval(atualizarDisplayExercicio, 1000);
     }
 
-    // Loop do tempo da série
     if (sessaoTreino && sessaoTreino.serieInicioTimestamp) {
       atualizarDisplaySerie();
       timerSerieInterval = setInterval(atualizarDisplaySerie, 1000);
@@ -1154,7 +1182,6 @@
     clearInterval(timerDescansoInterval);
   }
 
-  // --- CONCLUSÃO DE SÉRIE ---
   async function concluirSerieExercicio(treinoId, numSerie, totalSeries) {
     const btnAtual = document.getElementById(`btnSerie_${treinoId}_${numSerie}`);
     const rowAtual = document.getElementById(`serieRow_${treinoId}_${numSerie}`);
@@ -1166,7 +1193,6 @@
     btnAtual.className = "btn-sm btn-success";
     rowAtual.classList.add('serie-concluida');
 
-    // Registra na sessão persistente
     if (!sessaoTreino.seriesConcluidas[treinoId]) {
       sessaoTreino.seriesConcluidas[treinoId] = [];
     }
@@ -1174,9 +1200,8 @@
       sessaoTreino.seriesConcluidas[treinoId].push(numSerie);
     }
     sessaoTreino.cargas[treinoId] = carga;
-    sessaoTreino.serieInicioTimestamp = Date.now(); // Reseta relógio da série
+    sessaoTreino.serieInicioTimestamp = Date.now();
 
-    // Salva no backend
     fetch(`${getApiBase()}/aluno/execucao`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1184,20 +1209,17 @@
     });
 
     if (numSerie < totalSeries) {
-      // Habilita a próxima série
       const proximoNum = numSerie + 1;
       const btnProximo = document.getElementById(`btnSerie_${treinoId}_${proximoNum}`);
       btnProximo.disabled = false;
       btnProximo.className = "btn-sm btn-primary";
 
-      // Dispara o descanso
       const tempoCfg = sessaoTreino.tempoDescansoConfig || 60;
       sessaoTreino.descansoFimTimestamp = Date.now() + (tempoCfg * 1000);
       salvarEstadoSessao();
 
       iniciarLoopDescanso();
     } else {
-      // Concluiu todas as séries deste exercício
       finalizarExercicioAtivo(treinoId);
     }
   }
@@ -1228,7 +1250,6 @@
       <span class="badge" style="background:#64748b; color:#fff; font-size:12px; padding:6px 10px;">✓ Concluído</span>
     `;
 
-    // Desbloqueia os exercícios pendentes
     document.querySelectorAll('.exercicio-card').forEach(c => {
       const idStr = c.id.replace('cardExercicio_', '');
       const cId = parseInt(idStr);
@@ -1239,14 +1260,12 @@
 
     tocarAlertaSonoro(false);
 
-    // Verifica se finalizou todos os exercícios da ficha
     const totalCards = document.querySelectorAll('.exercicio-card').length;
     if (sessaoTreino.exerciciosConcluidos.length === totalCards) {
       alert("🎉 Parabéns! Você concluiu todos os exercícios deste treino!");
     }
   }
 
-  // --- DESCANSO ---
   function iniciarLoopDescanso() {
     clearInterval(timerDescansoInterval);
     const boxDescanso = document.getElementById('boxDescansoRegressivo');
