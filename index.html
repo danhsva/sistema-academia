@@ -559,20 +559,15 @@
         return;
       }
 
-      if (IS_GITHUB_PAGES) {
-        // No GitHub Pages: redireciona para a Raspberry Pi já entrando com a sessão pronta
-        const sessaoParam = encodeURIComponent(JSON.stringify(data.usuario));
-        window.location.href = `${servidorBaseUrl}/?sessao=${sessaoParam}`;
-      } else {
-        // Na Raspberry Pi: entra no painel local imediatamente
-        usuarioLogado = data.usuario;
-        if (usuarioLogado.primeiro_acesso) {
-          document.getElementById('modalPrimeiroAcesso').classList.remove('hidden');
-          usuarioLogado.primeiro_acesso = false;
-        }
-        localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
-        iniciarInterfacePorPerfil();
+      // Permanece no GitHub Pages e abre o treino na mesma página
+      usuarioLogado = data.usuario;
+      if (usuarioLogado.primeiro_acesso) {
+        document.getElementById('modalPrimeiroAcesso').classList.remove('hidden');
+        usuarioLogado.primeiro_acesso = false;
       }
+      localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
+      document.body.classList.remove('mode-portal');
+      iniciarInterfacePorPerfil();
 
     } catch (err) {
       console.error(err);
